@@ -28,7 +28,7 @@
 
 ## 2. Vì Sao Ngưỡng Chất Lượng Đặt Trên F1 Chứ Không Phải Accuracy
 
-Tập Adult mất cân bằng lớp: chỉ 24,8% số mẫu có thu nhập > 50K. Một mô hình vô dụng luôn trả lời "thu nhập thấp" vẫn đạt accuracy 0,752 mà không nhận diện được một người thu nhập cao nào, nên một ngưỡng kiểu "accuracy >= 0,75" sẽ để lọt mô hình đó ra production. F1 của lớp dương là trung bình điều hòa của precision và recall trên chính lớp thu nhập cao, vì vậy mô hình đoán toàn lớp 0 có F1 = 0 và bị quality gate chặn ngay. F1 chỉ cao khi mô hình vừa bắt được nhiều người thu nhập cao (recall) vừa ít gán nhầm (precision). Không dùng `average="weighted"` hay `average="macro"` vì các cách này trộn F1 của lớp 0 (chiếm 75% và luôn cao) vào kết quả, kéo con số lên và làm ngưỡng 0,65 mất ý nghĩa.
+Tập Adult mất cân bằng lớp: chỉ 24,8% số mẫu có thu nhập > 50K. Một mô hình vô dụng luôn trả lời "thu nhập thấp" vẫn đạt accuracy 0,752 mà không nhận diện được một người thu nhập cao nào, nên một ngưỡng kiểu "accuracy >= 0,75" sẽ để lọt mô hình đó ra production. F1 của lớp dương là trung bình điều hòa của precision và recall trên chính lớp thu nhập cao, vì vậy mô hình đoán toàn lớp 0 có F1 = 0 và bị quality gate chặn ngay. F1 chỉ cao khi mô hình vừa bắt được nhiều người thu nhập cao (recall) vừa ít gán nhầm (precision). Không dùng `average="weighted"` hay `average="macro"` vì các cách này trộn F1 của lớp 0 (chiếm 75% và luôn cao) vào kết quả, kéo con số lên và làm ngưỡng 0,65 mất ý nghĩa. Tôi đã kiểm chứng điều này trên pipeline: commit bộ tham số yếu (50, 0.05, 2) cho accuracy 0,842 nhưng F1 chỉ 0,5907, Quality Gate báo lỗi và Release bị bỏ qua (ảnh `07-quality-gate-chan.png`, `07b-quality-gate-log.png`); commit tiếp theo khôi phục bộ tham số tốt và pipeline xanh trở lại.
 
 ---
 
@@ -39,6 +39,7 @@ Tập Adult mất cân bằng lớp: chỉ 24,8% số mẫu có thu nhập > 50K
 | `mlflow 2.13` lỗi import (`pkg_resources`, `FallbackAsyncAdaptedQueuePool`). | Môi trường mới cài setuptools và SQLAlchemy 2.1 không còn tương thích. | Ghim thêm `setuptools<81` và `sqlalchemy<2.1` trong `requirements.txt`. |
 | Không tạo được `sa-key.json`, VM không được cấp IP public. | Org GCP bật policy `iam.disableServiceAccountKeyCreation` và `compute.vmExternalIpAccess`. | Dùng Workload Identity Federation cho GitHub Actions và service account gắn vào VM thay cho key; chỉ cho phép IP public riêng cho VM `income-api`. |
 | Push lên GitHub không kích hoạt pipeline. | Repo là fork nên Actions mặc định tắt trigger từ push. | Bật workflow trong tab Actions rồi push lại commit dữ liệu. |
+| Model không đạt ngưỡng vẫn ghi đè `artifacts/current/model.joblib`. | Khung đề bài upload model ngay trong job Train, trước Quality Gate. | Train chỉ lưu model thành GitHub artifact, job Release mới upload lên GCS; lần chạy bị chặn xác nhận model trên bucket không đổi. |
 
 ---
 
