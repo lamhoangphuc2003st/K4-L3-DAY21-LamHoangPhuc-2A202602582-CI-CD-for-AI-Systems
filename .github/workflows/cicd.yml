@@ -36,7 +36,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # JOB 2 - TRAIN
-  # Xac thuc cloud storage, pull du lieu bang DVC, huan luyen mo hinh, upload artifact.
+  # Xac thuc cloud storage, pull du lieu bang DVC, huan luyen mo hinh, luu artifact.
   # Chi chay khi Job 1 (Unit Test) hoan thanh thanh cong.
   # ---------------------------------------------------------------------------
   train:
@@ -81,25 +81,20 @@ jobs:
           F1=$(python -c "import json; d=json.load(open('outputs/report.json')); print(d['f1_score'])")
           echo "f1=$F1" >> $GITHUB_OUTPUT
 
-      - name: Upload model to Cloud Storage
-        env:
-          ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_BUCKET }}
-        run: |
-          python - <<'PYEOF'
-          import os
-          from google.cloud import storage
-          client = storage.Client()
-          bucket = client.bucket(os.environ["ARTIFACT_BUCKET"])
-          blob = bucket.blob("artifacts/current/model.joblib")
-          blob.upload_from_filename("models/model.joblib")
-          print(f"Uploaded model.joblib to gs://{bucket.name}/artifacts/current/model.joblib")
-          PYEOF
-
       - name: Save report as artifact
         uses: actions/upload-artifact@v4
         with:
           name: report
           path: outputs/report.json
+
+      # Model chi duoc luu tam thoi o day. Viec upload len Cloud Storage nam o job
+      # Release (sau Quality Gate), de model khong dat nguong khong bao gio ghi de
+      # len artifacts/current/model.joblib ma VM dang phuc vu.
+      - name: Save model as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: models/model.joblib
 
 
   # ---------------------------------------------------------------------------
@@ -130,14 +125,50 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # JOB 4 - RELEASE
-  # Trien khai len VM qua SSH.
+  # Upload model da qua Quality Gate len Cloud Storage, roi trien khai len VM qua SSH.
   # Chi chay khi Job 3 (Quality Gate) hoan thanh thanh cong.
   # ---------------------------------------------------------------------------
   release:
     name: Release
     needs: quality-gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # can thiet de lay OIDC token cho Workload Identity Federation
     steps:
+
+      - name: Download model artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: model
+          path: models
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Cloud Storage SDK
+        run: pip install google-cloud-storage==2.16.0
+
+      - name: Authenticate to Cloud Storage
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Upload model to Cloud Storage
+        env:
+          ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_BUCKET }}
+        run: |
+          python - <<'PYEOF'
+          import os
+          from google.cloud import storage
+          client = storage.Client()
+          bucket = client.bucket(os.environ["ARTIFACT_BUCKET"])
+          blob = bucket.blob("artifacts/current/model.joblib")
+          blob.upload_from_filename("models/model.joblib")
+          print(f"Uploaded model.joblib to gs://{bucket.name}/artifacts/current/model.joblib")
+          PYEOF
 
       - name: SSH deploy to VM
         uses: appleboy/ssh-action@v1.0.3
