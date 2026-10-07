@@ -1,8 +1,18 @@
 import os
 import json
+import mlflow
 import numpy as np
 import pandas as pd
+import pytest
 from src.train import train
+
+
+@pytest.fixture(autouse=True)
+def _isolated_mlflow(tmp_path):
+    """Ghi MLflow vao thu muc tam de test khong dung cham ./mlruns hay mlflow.db cua Buoc 1."""
+    mlflow.set_tracking_uri((tmp_path / "mlruns").as_uri())
+    yield
+    mlflow.set_tracking_uri(None)
 
 
 FEATURE_NAMES = [
