@@ -1,0 +1,5 @@
+[core]
+    remote = labstore
+['remote "labstore"']
+    url = gs://income-lab-lamhoangphuc-2a202602582/dvc
+    projectname = esoteric-might-510409-q0
