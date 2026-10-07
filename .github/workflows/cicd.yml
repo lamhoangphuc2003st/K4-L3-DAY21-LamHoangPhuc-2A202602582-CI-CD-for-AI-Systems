@@ -43,6 +43,9 @@ jobs:
     name: Train
     needs: unit-test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # can thiet de lay OIDC token cho Workload Identity Federation
     outputs:
       f1: ${{ steps.read_report.outputs.f1 }}
 
@@ -57,11 +60,13 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Authenticate to Cloud Storage
-        env:
-          STORAGE_CREDENTIALS: ${{ secrets.STORAGE_CREDENTIALS }}
-        run: |
-          printf '%s' "$STORAGE_CREDENTIALS" > /tmp/sa-key.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa-key.json" >> $GITHUB_ENV
+        # Org policy cua project chan tao service account key (sa-key.json), nen dung
+        # Workload Identity Federation: GitHub OIDC token -> service account income-lab-sa.
+        # Action nay tu ghi file credentials va set GOOGLE_APPLICATION_CREDENTIALS.
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Pull data with DVC
         # Chi pull train_batch1.csv va holdout.csv (khong can train_batch2.csv)
